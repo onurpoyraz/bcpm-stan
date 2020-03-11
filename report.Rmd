@@ -12,7 +12,7 @@ output:
     toc_depth: 2
     toc_float:
       smooth_scroll: no
-    self_contained: no
+    #self_contained: no
   word_document:
     toc: yes
     toc_depth: '2'
@@ -27,54 +27,87 @@ output:
     toc_depth: 2
 ---
 
-
-
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(comment = NA)
 ```
-
-
+\newpage
 # Loaded packages
 
 ```{r packages, echo=TRUE, results='hide', warning=FALSE, message=FALSE}
 library(rstan)
 library(BaM)
+```
+
+```{r color, echo=FALSE}
 rstan_options(auto_write = TRUE)
 options(mc.cores = parallel::detectCores())
+color = 'darkolivegreen4'
+#color = 'white'
+#color = 'goldenrod4'
+#color = 'deepskyblue2'
+#color = 'darkgoldenrod4'
+#color = 'deepskyblue4'
+```
+
+```{r esthetic, echo=FALSE}
+library(ggplot2) 
+theme_set(theme_bw(base_size=12))
+theme_update(panel.background = element_rect(fill = "transparent", colour = NA),
+             plot.background = element_rect(fill = "transparent", colour = NA))
+knitr::opts_chunk$set(dev.args=list(bg="transparent"))
+
+esthetic_convergence <- theme(
+    panel.background = element_rect(fill = "transparent"), # bg of the panel
+    plot.background = element_rect(fill = "transparent", color = NA), # bg of the plot
+    plot.title = element_text(color="white", hjust=0.5),
+    legend.background = element_rect(fill = "transparent"), # get rid of legend bg
+    legend.text = element_text(color="white"),
+    legend.title = element_text(color="white"),
+    legend.box.background = element_rect(color="white"), # get rid of legend panel bg
+    axis.text.x = element_text(color="white"),
+    axis.text.y = element_text(color="white"),
+    axis.ticks = element_line(color="white"),
+    axis.line = element_line(color="white"),
+    axis.title = element_text(color="white"))
+
+
+esthetic_run_length <- theme(
+    panel.background = element_rect(fill = "transparent"), # bg of the panel
+    plot.background = element_rect(fill = "transparent", color = NA), # bg of the plot
+    plot.title = element_text(color="white", hjust=0.5, size=25),
+    legend.background = element_rect(fill = "transparent"), # get rid of legend bg
+    legend.text = element_text(color="white"),
+    legend.title = element_text(color="white"),
+    legend.box.background = element_rect(color="white"), # get rid of legend panel bg
+    axis.text.x = element_blank(),
+    axis.text.y = element_blank(),
+    #axis.ticks = element_blank(),
+    axis.line = element_line(color="white"),
+    axis.title = element_text(color="white", size=20))
 ```
 
 # Introduction
 
-In this project we have implemented three different changepoint detection algorithms. While two of them are detecting two changepoints in a given data, the third one is working online and can detect as many as changepoints which are possible.
+The changepoint detection problem is one of the essential problems in time series data. During the time series analysis, there could be changes in the underlying dynamics, and it is valuable to detect them. Given sequential data, we might be interested in the changes in the data distribution, especially these data changes in some way. For example, with the help of effective and efficient changepoint algorithms, heart attacks, failures in the machinery system, or changes in the economic trends could be detected, even prevented. If we assume that data is a result of such a generative process, then we can find the changes in this generative process. 
 
-In this report, we are comparing these models and sharing statistical workflow of these algorithms. 
+Changepoint detection models aim to detect the changes in signals or time-series data. In this project, we have implemented three different changepoint detection algorithms. While two of them are detecting two changepoints in a given data, the third one is working online and can detect as many as changepoints which there may be. We are comparing these models and sharing statistical workflow of these algorithms. 
 
-# Description of the Problem
-
-Given a sequential data we might interest in the changes in the data, especially these data change in some way, such as a machinery system could goes to failure or economic trends could be changed. If we asume that data is a result from such a generative process, then we can find the changes in this generative process. 
-
-Changepoint detection models aim to detect the changes in signals or time series data. The models of changepoint detection may detect only one changepoint, or multiple changepoints. In our project we implemented three different models. 
-
-- Gamma-Poisson Multiple Changepoint Detection for two changepoints
-- Hierarchical Gamma-Poisson Multiple Changepoint Detection for two changepoints
-
-The third model we implemented is an online changepoint model. 
-
+- Poisson-Gamma Multiple Changepoint Detection for two changepoints
+- Hierarchical Poisson-Gamma Multiple Changepoint Detection for two changepoints
 - Bayesian Online Changepoint Detection[*]
 
-The details of the models are given in the following sections.
+In this report, we give a description of the datasets in Section 3. Section 4 gives the details of the models and the implemented STAN code. We report the prior choices and fit the models in Section 5. Section 6 gives the histograms of the parameters and posterior sampling histograms besides the divergences of parameters. We showed the advantage of the Bayesian Online Changepoint model on synthetic data in Section 7. Finally, our comments and conclusion of our report are given in Section 8. 
 
 [*] Adams, Ryan Prescott, and David JC MacKay. "Bayesian online changepoint detection." arXiv preprint arXiv:0710.3742 (2007).
 
-
 # Description of the Data
-## Coal Mining Dataset
 
-We are using Coil Mining Disasters dataset from BaM library (BaM: Functions and Datasets for Books by Jeff Gill). The data is a vector of British Coal Mining Disasters in length 111.
+## Coal Mining Disasters Dataset
 
-The data is the number of deaths along a time period at the coil mine disasters.
+We are using Coal Mining Disasters dataset from BaM library (BaM: Functions and Datasets for Books by Jeff Gill). The data consists of the number of deadly coal-mining disasters in England per year over for 112 years from 1851 to 1962. It is widely agreed in the statistical literature that a change in the intensity (the expected value of the number of disasters) occurs around the year 1890 after new health and safety regulations were introduced. Therefore it is common to use this dataset in the changepoint detection algorithms in the literature, as we do.
 
-Source: Lynn, R. and Vanhanen, T. (2001). National IQ and Economic Development. Mankind Quarterly LXI, 415-437.
+Source: Lynn et al. (2001). National IQ and Economic Development. Mankind Quarterly LXI, 415-437.
 
 ```{r load data}
 data <- list(T = length(coal.mining.disasters),
@@ -83,21 +116,19 @@ data <- list(T = length(coal.mining.disasters),
              mean_D = mean(coal.mining.disasters))
 ```
 
-```{r plot data}
-color = 'darkolivegreen4'
-color = 'white'
-par(bg=NA, fg = color, col.lab=color, col.axis=color, col.main=color)
-plot(1856:(1856+110),coal.mining.disasters, type="l", ylab = 'Number of Deaths',xlab='Year',main='Coal Mining Disasters Dataset')
+
+```{r plot data, fig.height=5, fig.width=10}
+par(bg = NA, fg = color, col.lab = color, col.axis = color, col.main = color)
+plot(coal.mining.disasters, type = "l", ylab = 'Number of Deaths', 
+     xlab = 'Index', main = 'Coal Mining Disasters Dataset')
 ```
 
 ## Synthetic Data
 
-Additionally, in order to show the performance of the Bayesian Online Changepoint Model (BOCM) on multiple changepoints, we are using this synthetic data: 
+The coal-mining disasters dataset is the choice of the literature. However, it would be clearer to show the effectiveness of the developed models if the model is capable of capturing more than 2 changepoints. In this work, to show the performance and the efficiency of the Bayesian Online Changepoint Model (BOCM) on multiple changepoints, we have used the following synthetic data: 
 
-```{r load artificial data}
+```{r load synthetic data}
 synthetic_data <- c(read.csv("synthetic_data.csv", header = FALSE))$V1
-
-
 data_synthetic <- list(T = length(synthetic_data),
                        D = synthetic_data,
                        H = 0.01,
@@ -105,272 +136,457 @@ data_synthetic <- list(T = length(synthetic_data),
 ```
 
 
-```{r plot artificial data}
-color = 'darkolivegreen4'
-par(bg=NA, fg = color, col.lab=color, col.axis=color, col.main=color)
-plot(synthetic_data, type="l")
+```{r plot synthetic data, fig.height=5, fig.width=10}
+par(bg = NA, fg = color, col.lab = color, col.axis = color, col.main = color)
+plot(synthetic_data, type = "l", ylab="Value", 
+     xlab = 'Index', main='Synthetic Data')
 ```
 
+\newpage
 # Model Details and Stan Codes
 
-## Gamma-Poisson Multiple Changepoint Model
+## Poisson-Gamma Multiple Changepoint Model
 
 The assumptions of this model are:
-- There are two changepoints on the time series data, that is there are three intervals.
-- The data comes from a Poisson distribution in each interval. 
+
+- There are two change points on the time series data; that is, there are three intervals.
+- The data come from a Poisson distribution in each interval. 
 - The means of the Poisson distribution generated by underlying Gamma distributions. 
 
 The generative process of the model is:
-
-$$
-\begin{aligned} e & \sim \text { Gamma }\left(r_{e},1\right) \\
+\begin{align*} 
+e & \sim \text { Gamma }\left(r_{e},1\right) \\
 l & \sim \text { Gamma }\left(r_{l},1\right) \\ 
 m & \sim \text { Gamma }\left(r_{m},1\right) \\ 
 s_1 & \sim \text { Uniform }(1, T) \\ 
-s_2 & \sim \text { Uniform }(1, T) \\ 
-\end{aligned}
-$$
-
-
-$$
+s_2 & \sim \text { Uniform }(1, T)
+\end{align*}
+\begin{align} 
 D_{t} \sim \text { Poisson }( \lambda ) \quad \lambda = \left\{\begin{array}{lll}{e} & \text {if }\: t < s_1  \\ 
 {l} & \text {if }\:  s_1 <= t < s_2  \\ 
 {m} & \text {else }\: 
 \end{array}\right.
-$$
+\end{align} 
 
 The likelihood of the model is:
+\begin{align} 
+p(D | e, l,m) &= \sum_{s_1=1}^{T} \sum_{s_2=s_1}^{T}  p(s_1, s_2, D \mid e, l, m) \\ 
+&=\sum_{s_1=1}^{T} \sum_{s_2=s_1}^{T} p(s_1) p(s_2 \mid s_1) p(D \mid s_1, s_2, e, l,m) \\ 
+&=\sum_{s_1=1}^{T} \sum_{s_2=s_1}^{T} U(s_1 \mid 1, T) U(s_2 \mid s_1, T)  \prod_{t=1}^{T} \text { Poisson }\left(D_{t} \mid t<s_1 ?\; e : \left(t<s_2\right)\; ? \; l :\; m\right) 
+\end{align}
 
-$$
-\begin{aligned} p(D | e, l,m) &= \sum_{s_1=1}^{T} \sum_{s_2=s_1}^{T}  p(s_1, s_2, D | e, l, m) \\ &=\sum_{s=1}^{T}  \sum_{s_2=s_1}^{T} p(s_1) p(s_2) p(D | s_1, s_2, e, l,m) \\ &=\sum_{s_1=1}^{T} \sum_{s_2=s_1}^{T} \text { Uniform }(s_1 | 1, T) \text { Uniform }(s_2 | 1, T)  \prod_{t=1}^{T} \text { Poisson }\left(D_{t} | t<s_1 ?\; e : (t<s_2)\; ? \; l :\; m\right) \end{aligned}
-$$
+We modified the single Exponential-Poisson changepoint[*,**] model to handle two changepoints, and the linear single changepoint algorithm to handle two changepoints. The computation of our code is quadratic, $O((n^2+3n)/2)$, instead of $O(n^3)$. 
 
-
-We modified the single Exponential-Poisson changepoint[*,**] model to handle two changepoints. And modified the linear single changepoint algorithm to handle two changepoints. The computation of our code is quadratic, $ O((n^2+3n)/2)$, instead of $O(n^3)$. 
-
-[*] Fonnesbeck, Chris, Anand Patil, David Huard, and John Salvatier. 2013. PyMC User’s Guide.
-
+[*] Fonnesbeck, Chris, Anand Patil, David Huard, and John Salvatier. 2013. PyMC User’s Guide.\
 [**] Stan's User Guide, Change Point Models; https://mc-stan.org/docs/2_21/stan-users-guide/change-point-section.html
 
-
-The Stan code of Gamma-Poisson Multiple Changepoint Model for two changepoints is as follows:
-
-```{r write stan code}
-writeLines(readLines("./StanFiles/multiple_changepoint_gamma.stan"))
+\newpage
+**The Stan code of Poisson-Gamma Multiple Changepoint Model for two changepoints is as follows:**
+```{stan multiple change point gamma, output.var="multiple", eval=FALSE, echo=TRUE}
+data {
+  int<lower=1> T;
+  int<lower=0> D[T];
+  real<lower=0> mean_D;
+}
+transformed data {
+  real log_unif;
+  log_unif = -log(T);
+}
+parameters {
+  real<lower=0> e;
+  real<lower=0> l;
+  real<lower=0> m;
+}
+transformed parameters {
+  matrix[T, T] lp;
+  row_vector[T + 1] lp_e;
+  row_vector[T + 1] lp_l;
+  row_vector[T + 1] lp_m;
+  lp = rep_matrix(2*log_unif, T, T);
+  lp_e[1] = 0;
+  lp_l[1] = 0;
+  lp_m[1] = 0;
+  for (t in 1:T) {
+    lp_e[t + 1] = lp_e[t] + poisson_lpmf(D[t] | e);
+    lp_l[t + 1] = lp_l[t] + poisson_lpmf(D[t] | l);
+    lp_m[t + 1] = lp_m[t] + poisson_lpmf(D[t] | m);
+  }      
+  for (s1 in 1:T){
+    for (s2 in s1:T){
+      lp[s1, s2] = lp_e[s1+1] - lp_l[s1+1] + lp_l[s2+1] - lp_m[s2+1] + lp_m[T+1];
+      lp[s2, s1] = -1e6;
+    }
+  }
+}
+model {
+  e ~ gamma(mean_D, 1);
+  l ~ gamma(mean_D, 1);
+  m ~ gamma(mean_D, 1);
+  target += log_sum_exp(lp);
+}
+generated quantities {
+  int<lower=1, upper=T> s1s;
+  int<lower=1, upper=T> s2s;
+  int tmp;
+  tmp = categorical_logit_rng(to_vector(lp));
+  s1s = (tmp % T) == 0 ? T : (tmp % T);
+  s2s = (tmp / T ) == T ? T : (tmp / T + 1) ; 
+}
 ```
+\newpage
+## Hierarchical Poisson-Gamma Multiple Changepoint Model
 
-## Hierarchical Multiple Changepoint Model
+The assumptions of this model are:
 
-In the hierarchical multiple changepoint model, we assume that the shape parameters of the priors for the interval means have a common prior. 
+- There are two change points on the time series data; that is, there are three intervals.
+- The data come from a Poisson distribution in each interval. 
+- The means of the Poisson distribution generated by underlying Gamma distributions. 
+- the shape parameters of the priors for the interval means have a common Gamma prior.
 
-$$
-\begin{aligned} 
+The generative process of the model is:
+\begin{align*} 
 r_{\{e, l, m\}} & \sim \text { Gamma } (\alpha ,1)\\
 e & \sim \text { Gamma }\left(r_{e},1\right) \\
 l & \sim \text { Gamma }\left(r_{l},1\right) \\ 
 m & \sim \text { Gamma }\left(r_{m},1\right) \\ 
 s_1 & \sim \text { Uniform }(1, T) \\ 
 s_2 & \sim \text { Uniform }(1, T) \\ 
-\end{aligned}
-$$
-
-
-
-$$
+\end{align*}
+\begin{align} 
 D_{t} \sim \text { Poisson }( \lambda ) \quad \lambda = \left\{\begin{array}{lll}{e} & \text {if }\: t < s_1  \\ 
 {l} & \text {if }\:  s_1 <= t < s_2  \\ 
 {m} & \text {else }\: 
 \end{array}\right.
-$$
+\end{align}
 
+The likelihood of the model is almost the same as previous one:
+\begin{align} 
+p(D | e, l, m, \alpha) &= \sum_{s_1=1}^{T} \sum_{s_2=s_1}^{T}  p(s_1, s_2, D \mid e, l, m, \alpha) \\ 
+&=\sum_{s_1=1}^{T} \sum_{s_2=s_1}^{T} p(s_1) p(s_2 \mid s_1) p(D \mid s_1, s_2, e, l, m, \alpha) \\ 
+&=\sum_{s_1=1}^{T} \sum_{s_2=s_1}^{T} U(s_1 \mid 1, T) U(s_2 \mid s_1, T)  \prod_{t=1}^{T} \text { Poisson }\left(D_{t} \mid t<s_1 ?\; e : \left(t<s_2\right)\; ? \; l :\; m\right) 
+\end{align}
 
-The Stan code of Hierarchical Gamma-Poisson Multiple Changepoint Model for two changepoints is as follows:
-
-```{r write stan code-hierarchical}
-writeLines(readLines("./StanFiles/hierar_multiple_changepoint_gamma.stan"))
+\newpage
+**The Stan code of Hierarchical Poisson-Gamma Multiple Changepoint Model for two changepoints is as follows:**
+```{stan hierarchicalmultiple change point gamma, output.var="hierarchical", eval=FALSE, echo=TRUE}
+data {
+  int<lower=1> T;
+  int<lower=0> D[T];
+  real<lower=0> mean_D;
+}
+transformed data {
+  real log_unif;
+  log_unif = -log(T);
+}
+parameters {
+  real<lower=0> e;
+  real<lower=0> l;
+  real<lower=0> m;
+  real<lower=0> r[3];
+}
+transformed parameters {
+  matrix[T, T] lp;
+  row_vector[T + 1] lp_e;
+  row_vector[T + 1] lp_l;
+  row_vector[T + 1] lp_m;
+  lp = rep_matrix(2*log_unif, T, T);
+  lp_e[1] = 0;
+  lp_l[1] = 0;
+  lp_m[1] = 0;
+  for (t in 1:T) {
+    lp_e[t + 1] = lp_e[t] + poisson_lpmf(D[t] | e);
+    lp_l[t + 1] = lp_l[t] + poisson_lpmf(D[t] | l);
+    lp_m[t + 1] = lp_m[t] + poisson_lpmf(D[t] | m);
+  }      
+  for (s1 in 1:T){
+    for (s2 in s1:T){
+      lp[s1, s2] = lp_e[s1+1] - lp_l[s1+1] + lp_l[s2+1] - lp_m[s2+1] + lp_m[T+1];
+      lp[s2, s1] = -1e6;
+    }
+  }
+}
+model {
+  r ~ gamma(mean_D, 1);
+  e ~ gamma(r[1], 1);
+  l ~ gamma(r[2], 1);
+  m ~ gamma(r[3], 1);
+  target += log_sum_exp(lp);
+}
+generated quantities {
+  int<lower=1, upper=T> s1s;
+  int<lower=1, upper=T> s2s;
+  int tmp;
+  tmp = categorical_logit_rng(to_vector(lp));
+  s1s = (tmp % T) == 0 ? T : (tmp % T);
+  s2s = (tmp / T ) == T ? T : (tmp / T + 1) ;
+}
 ```
 
 ## Bayesian Online Changepoint Detection
 
+In this section, we discuss the online changepoint detection algorithm and its Stan application, according to Ryan P. Adams and David J.C. MacKay's technical report on Bayesian online changepoint detection.
 
-In this section we will discuss about online chnage point algorithm and its Stan application with explaining Ryan P. Adams and David J.C. MacKay’s technical report on Bayesian online changepoint detection.
+In contrast to the previous model, we won't assume any change point in this model. Instead, the sequence of observations can be divided into non-overlapping subsequences. We are interested in the transition of these non-overlapping subsequences.
 
-In contrast to previous model we won't assume any change point in this model. Instead, the sequence of observation can be divided into non-overlapping subsequences. We will interested in the transition of this non-overlapping subsequences.
-
-Bayesian online changepoint detection focues on run-length of the sub-sequences from last changepoint and run length is denoted as $r_t$ and it is updated as follows:
-
-\begin{eqnarray}
-P\left(r_{t} | r_{t-1}\right)=\left\{\begin{array}{ll}{H\left(r_{t-1}+1\right)} & {\text { if } r_{t}=0} \\ {1-H\left(r_{t-1}+1\right)} & {\text { if } r_{t}=r_{t-1}+1} \\ {0} & {\text { otherwise }}\end{array}\right.
-\end{eqnarray}
+Bayesian online changepoint detection models the run-length of the sub-sequences from the last changepoint and run length is denoted as $r_t$, and it is updated as follows:
+\begin{align}
+P\left(r_{t} \mid r_{t-1}\right)=\left\{\begin{array}{ll}{H\left(r_{t-1}+1\right)} & {\text { if } r_{t}=0} \\ {1-H\left(r_{t-1}+1\right)} & {\text { if } r_{t}=r_{t-1}+1} \\ {0} & {\text { otherwise }}\end{array}\right.
+\end{align}
 
 In which $H(\tau)$ is hazard function which is dependend on current run length. For the simplicity it could be treated as a constant also and we will show it as $H(\tau) = 1/\lambda$.
 
 ### Recursive Run Length Estimation
 
-If we assume that we can calculate the predictive distribution of most recent observation given the current run length then we can calculate the marginal predictive distribution by integrating over the posterior distribution.
-
-\begin{eqnarray}
+If we assume that we can calculate the predictive distribution of most recent observation given the current run length, then we can calculate the marginal predictive distribution by integrating over the posterior distribution.
+\begin{align}
 P\left(x_{t+1} \mid \boldsymbol{x}_{1: t}\right)=\sum_{r_{t}} P\left(x_{t+1} \mid r_{t}, \boldsymbol{x}_{t}^{(r)}\right) P\left(r_{t} \mid \boldsymbol{x}_{1: t}\right)
-\end{eqnarray}
+\end{align}
 
 where posterior distribution of run length at time is;
-
-\begin{eqnarray}
+\begin{align}
 P\left(r_{t} \mid \boldsymbol{x}_{1: t}\right)=\frac{P\left(r_{t}, \boldsymbol{x}_{1: t}\right)}{P\left(\boldsymbol{x}_{1: t}\right)}
-\end{eqnarray}
+\end{align}
 
 The joint distribution can be calculated by recursive algorithm which is similar to forward algorithm of the HMMs;
-
-\begin{eqnarray}
-P\left(r_{t}, \boldsymbol{x}_{1: t}\right) &=& 
-\sum_{r_{t-1}} P\left(r_{t}, r_{t-1}, \boldsymbol{x}_{1: t}\right) \\
-&=&\sum_{r_{t-1}} P\left(r_{t}, x_{t} \mid r_{t-1}, \boldsymbol{x}_{1: t-1}\right) P\left(r_{t-1}, \boldsymbol{x}_{1: t-1}\right) \\
-&=& \sum_{r_{t-1}} P\left(r_{t} \mid r_{t-1}\right) P\left(x_{t} \mid r_{t-1}, \boldsymbol{x}_{t}^{(r)}\right) P\left(r_{t-1}, \boldsymbol{x}_{1: t-1}\right)
-\end{eqnarray}
+\begin{align}
+P\left(r_{t}, \boldsymbol{x}_{1: t}\right) 
+&=\sum_{r_{t-1}} P\left(r_{t}, r_{t-1}, \boldsymbol{x}_{1: t}\right) \\
+&=\sum_{r_{t-1}} P\left(r_{t}, x_{t} \mid r_{t-1}, \boldsymbol{x}_{1: t-1}\right) P\left(r_{t-1}, \boldsymbol{x}_{1: t-1}\right) \\
+&= \sum_{r_{t-1}} P\left(r_{t} \mid r_{t-1}\right) P\left(x_{t} \mid r_{t-1}, \boldsymbol{x}_{t}^{(r)}\right) P\left(r_{t-1}, \boldsymbol{x}_{1: t-1}\right)
+\end{align}
 
 Ultimately, we want to infer both the run-length posterior distribution $p(r_t \mid \boldsymbol{x}_{1:t})$ and the posterior predictive distribution $p(x_{t+1} \mid \boldsymbol{x}_{1:t})$ so that we can predict the next data point given all the data we have seen so far.
 
-We implemented two versions of this model In the first one, we have implemeted the analytical solution of the BOCM. In the second one, we have implemented the Monte Carlo solution of this model. In both of them observations are coming from again Poisson distribution, while the mean of the Poisson distribution comes from the underlying Gamma distribution. 
+We implemented two versions of this model. In the first one, we have implemented the analytical solution of the BOCM. In the second one, we have implemented the Monte Carlo solution of this model. In both of them, observations are coming from again Poisson distribution, while the mean of the Poisson distribution comes from the underlying Gamma distribution. 
 
-The Stan code of the analytical solution of BOCM is as follows:
+\newpage
+**The Stan code of the analytical solution of BOCM is as follows:**
 
-```{r write stan code-analytic}
-writeLines(readLines("./StanFiles/online_analytic.stan"))
+```{stan bayesian online analytical code, output.var="hierarchical", eval=FALSE, echo=TRUE}
+data {
+  int<lower=1> T;
+  int<lower=0> D[T];
+  real<lower=0, upper=1> H;
+}
+
+transformed data {
+  real log_increase;
+  real log_decrease;
+  matrix[T+1, T+1] R;
+  matrix[T+1, T+1] alpha;
+  matrix[T+1, T+1] beta;
+
+  log_increase = log(1 - H);
+  log_decrease = log(H);
+  R = rep_matrix(-1e20, T+1, T+1);
+  R[1,1] = 0;
+  alpha = rep_matrix(1, T+1, T+1);
+  beta = rep_matrix(1, T+1, T+1);
+  for (t in 1:T){
+    for (j in 1:t){
+      R[j+1, t+1] = R[j, t] + neg_binomial_lpmf(D[t] | alpha[j, t], beta[j, t]) + log_increase;
+      R[1, t+1] = log_sum_exp(R[1, t+1], R[j, t] + neg_binomial_lpmf(D[t] | alpha[1, t], beta[1, t]) + log_decrease);
+      alpha[j+1, t+1] = alpha[j, t] + D[t];
+      beta[j+1, t+1] = beta[j, t] + 1;
+    }
+  }
+}
+
+model {
+
+}
+
+generated quantities {
+  vector[T] run_length;
+  for (t in 1:T)
+    run_length[t] = categorical_logit_rng(col(R, t+1)[1:t+1]);
+}
 ```
 
-The Stan code of the Monte Carlo solution of BOCM is as follows:
+\newpage
+**The Stan code of the Monte Carlo solution of BOCM is as follows:**
 
-```{r write stan code-mcmc}
-writeLines(readLines("./StanFiles/online_mcmc.stan"))
+```{stan bayesian online mcmc code, output.var="hierarchical", eval=FALSE, echo=TRUE}
+data {
+  int<lower=1> T;
+  int<lower=0> D[T];
+  real<lower=0> mean_D;
+  real<lower=0, upper=1> H;
+}
+
+transformed data {
+  real log_increase;
+  real log_decrease;
+
+  log_increase = log(1 - H);
+  log_decrease = log(H);
+}
+
+parameters {
+  vector<lower=0>[T] alpha;
+}
+
+transformed parameters {
+  matrix[T+1, T+1] R;
+  R = rep_matrix(-1e20, T+1, T+1);
+  R[1, 1] = 0;
+  for (t in 1:T){
+    for (j in 1:t){
+      R[j+1, t+1] = R[j, t] + poisson_lpmf(D[t] | alpha[t-j+1]) + log_increase;
+      R[1, t+1] = log_sum_exp(R[1, t+1], R[j, t] + poisson_lpmf(D[t] | alpha[t]) + log_decrease);
+    }
+  }
+}
+
+model {
+  alpha ~ gamma(mean_D, 1);
+  target += log_sum_exp(R);
+}
+
+generated quantities {
+  vector[T] run_length;
+  for (t in 1:T)
+    run_length[t] = categorical_logit_rng(col(R, t+1)[1:t+1]);
+}
 ```
 
+
+\newpage
 
 # Prior Choices and Fitting the Models 
 
-## Gamma-Poisson Multiple Changepoint Model
+## Poisson-Gamma Multiple Changepoint Model
 
 ### Prior Choices 
 
-We have Gamma priors for interval means and Uniform prior on changepoints. We are using the mean of the data as the Gamma shape for the interval means priors.
+We have Gamma priors for interval means and uniform prior on changepoints. We are using the mean of the data as the Gamma shape for the interval means priors.
+\begin{align*}
+\{r_e, r_l, r_m\} = \text {Gamma} (\bar{D},1)
+\end{align*}
 
-$$
-\{r_e, r_l, r_m\} = \text {Gamma} (mean(D),1)
-$$
-Since we do not want to put any constraints on the changepoints, we are using uniform distribution over the data length.
-
-### Fitting the Model
-
-We fit the model for 5 chains and 5000 iterations with 2000 warm-up phase.
-
-```{r fitting multiple gamma,echo=TRUE, results = 'hide', warning=FALSE, message=FALSE}
-num_chains = 5
-fit_mgamma <- stan('./StanFiles/multiple_changepoint_gamma.stan',
-                 data=data,
-                 iter=5000, warmup=2000, chains=num_chains,control = list(adapt_delta=0.9)
-)
-draws_separate_mgamma <- as.data.frame(fit_mgamma)
-```
-
-
-## Hierarchical Multiple Changepoint Model
-
-### Prior Choices 
-
-We are using the mean of the data as the shape of the Gamma distribution on interval mean prior Gamma distribution's shape. That is we set $\alpha = mean(D)$
-We are using 1 as scale on all Gamma distribution. So, using the mean of the data as Gamma shape of the priors seems plausable for both models. 
-
-Since we do not want to put any constarints on the changepoints, we are using uniform distribution over the data length.
+Since we do not want to put any constraints on the changepoints, we are using a uniform distribution over the data length.
 
 ### Fitting the Model
 
 We fit the model for 5 chains and 6000 iterations with 2000 warm-up phase.
 
-```{r fitting multiple gamma-hierarchical ,echo=TRUE, results = 'hide', warning=FALSE, message=FALSE}
-num_chains = 5
-fit_hmgamma <- stan('./StanFiles/hierar_multiple_changepoint_gamma.stan',
-                 data=data,
-                 iter=6000, warmup=2000, chains=num_chains,control = list(adapt_delta=0.99)
-)
-draws_separate_hmgamma <- as.data.frame(fit_hmgamma)
+```{r fitting multiple gamma,echo=TRUE, results = 'hide', warning=FALSE, message=FALSE}
+num_chains <- 5
+fit_mgamma <- stan('./StanFiles/multiple_changepoint_gamma.stan', 
+                   data = data,
+                   iter = 6000, 
+                   warmup = 2000, 
+                   chains = num_chains, 
+                   control = list(adapt_delta=0.9)
+                   )
+
+draws_mgamma <- as.data.frame(fit_mgamma)
 ```
 
 
+## Hierarchical Poisson-Gamma Multiple Changepoint Model
+
+### Prior Choices 
+
+We are using the mean of the data as the shape of the Gamma distribution on interval mean prior Gamma distribution's shape. That is we set $\alpha = \bar{D}$
+We are using $1$ as a scale on all Gamma distribution. So, using the mean of the data as the Gamma shape of the priors seems plausible for both models. 
+
+Since we do not want to put any constraints on the changepoints, we are using a uniform distribution over the data length.
+
+### Fitting the Model
+
+We fit the model for 5 chains and 6000 iterations with a 2000 warm-up phase.
+
+```{r fitting multiple gamma-hierarchical ,echo=TRUE, results = 'hide', warning=FALSE, message=FALSE}
+num_chains <- 5
+fit_hmgamma <- stan('./StanFiles/hierar_multiple_changepoint_gamma.stan', 
+                    data = data,
+                    iter = 6000, 
+                    warmup = 2000, 
+                    chains = num_chains, 
+                    control = list(adapt_delta=0.99)
+                    )
+
+draws_hmgamma <- as.data.frame(fit_hmgamma)
+```
+
+\newpage
 ## Bayesian Online Changepoint Detection
 
 ### Prior Choices 
 
 We are using the mean of the data as the shape of the Gamma distribution on interval mean prior Gamma distribution's shape. 
-Additionaly we have a hazard prior, which corresponds to the rate of the changepoint. In our experiments we are using $H=0.01$, which means a point is a changepoint with $p=H$. 
+Additionally, we have a hazard prior, which corresponds to the rate of the changepoint. In our experiments, we are using $H=0.01$, which means a point is a changepoint at $p=H$. 
 
 
 ### Fitting the Model
 
-In the first part we find the analytical solution and we use fixed parameters. 
+In the first part, we find the analytical solution, and we use fixed parameters. 
 
-We fit the model for 5 chain and 2000 iterations with 200 warm-up phase.
+We fit the model for 5 chain and 2500 iterations with 500 warm-up phase.
 
 
 ```{r fitting-analytic,echo=TRUE, results = 'hide', warning=FALSE, message=FALSE}
+num_chains <- 5
 fit_analytic <- stan("StanFiles/online_analytic.stan",
-                     data=data, 
+                     data = data, 
                      algorithm = "Fixed_param",
-                     iter=2500, warmup=500, chains=5)
+                     iter = 2500, 
+                     warmup = 500, 
+                     chains=num_chains
+                     )
+
+draws_analytic <- extract(fit_analytic, pars = c("run_length"))$run_length
 ```
 
+In this part, we use MCMC sampling and find the posterior of the samples with these samples. 
 
-```{r draws-analytic,echo=TRUE, results = 'hide', warning=FALSE, message=FALSE}
-draws_analytic <- extract(fit_analytic, pars = c("meas"))
-t_draws_analytic <- t(draws_analytic$meas)
-```
-
-In this part, we use MCMC algorithm. 
-
-We fit the model for 5 chain and 2000 iterations with 200 warm-up phase.
+We fit the model for 5 chain and 2500 iterations with 500 warm-up phase.
 
 ```{r fitting-mcmc,echo=TRUE, results = 'hide', warning=FALSE, message=FALSE}
+num_chains <- 5
 fit_mcmc <- stan("StanFiles/online_mcmc.stan",
-                 data=data, 
-                 iter=2500, warmup=500, chains=5)
+                 data = data, 
+                 iter = 2500, 
+                 warmup = 500, 
+                 chains = num_chains
+                 )
+
+draws_mcmc <- extract(fit_mcmc, pars = c("run_length"))$run_length
 ```
 
-
-```{r draws-mcmc,echo=TRUE, results = 'hide', warning=FALSE, message=FALSE}
-draws_mcmc <- extract(fit_mcmc, pars = c("meas"))
-t_draws_mcmc <- t(draws_mcmc$meas)
-```
-
-
+\newpage
 # Histograms and Divergences of Parameters
 
-## Gamma-Poisson Multiple Changepoint Model
+## Poisson-Gamma Multiple Changepoint Model
 
 ### Histogram of the Parameters
 
 The histograms of the parameters are as follows:
 
-```{r plot s1 histogram}
+```{r color mult hist, echo=FALSE}
 color = 'darkgoldenrod4'
-samples = draws_separate_mgamma
-
-par(bg=NA, fg = color, col.lab=color, col.axis=color, col.main=color)
-hist(samples$s1s, breaks = 100, main = 'Histogram of First Changepoint Samples ', 
-     xlab = 's_1',xlim = c(0,data$T))
 ```
-```{r plot s2 histogram}
-par(bg=NA, fg = color, col.lab=color, col.axis=color, col.main=color)
-hist(samples$s2s, breaks = 100, main = 'Histogram of Second Changepoint Samples ', 
-     xlab = 's_2',xlim = c(0,data$T))
 
-```
 ```{r plot means}
-color = 'deepskyblue2'
-par(bg=NA, fg = color, col.lab=color, col.axis=color, col.main=color)
-hist(samples$e, breaks = 100, main = 'Histogram of the Mean of the First Interval', 
-     xlab = 'e',xlim = c(0,6))
-hist(samples$l, breaks = 100, main = 'Histogram of the Mean of the Second Interval', 
-     xlab = 'l',xlim = c(0,6))
-hist(samples$m, breaks = 100, main = 'Histogram of the Mean of the Third Interval', 
-     xlab = 'm',xlim = c(0,6))
+par(bg = NA, fg = color, col.lab = color, col.axis = color, col.main = color)
+hist(draws_mgamma$e, breaks=100, main='Mean of the First Interval', xlab='e', xlim=c(0,6))
+hist(draws_mgamma$l, breaks=100, main='Mean of the Second Interval', xlab='l', xlim=c(0,6))
+hist(draws_mgamma$m, breaks=100, main='Mean of the Third Interval', xlab='m', xlim=c(0,6))
+```
+
+### Posterior Sampling
+
+```{r color mult posterior, echo=FALSE}
+color = 'deepskyblue4'
+```
+
+```{r plot histogram-multiple}
+par(bg = NA, fg = color, col.lab = color, col.axis = color, col.main = color)
+hist(draws_mgamma$s1s, breaks=100, main='First Changepoint Samples', 
+     xlab = 's_1', xlim = c(0,data$T), ylim = c(0,3500))
+hist(draws_mgamma$s2s, breaks=100, main='Second Changepoint Samples', 
+     xlab = 's_2', xlim = c(0,data$T), ylim = c(0,7000))
 ```
 
 ### Convergence Diagnostics
@@ -383,11 +599,11 @@ print(fit_mgamma, pars = c("e", "l","m", "s1s","s2s"),
       digits_summary = 2, include = TRUE)
 ```
 
-As we can see that the Rhat values for all parameters and changepoint estimations are 1, that is our model fitted very well.  
+As we can see that the Rhat values for all parameters and changepoint estimations are 1, that is, our model fitted very well.  
 
-The effective sample sizes are looking also good. The ration n_eff / n_transitions is greater than 0.001 for all parameters. 
+The effective sample sizes are also looking good. The ration n_eff / n_transitions is greater than 0.001 for all parameters. 
 
-Here we check the tree depth, E-BFMI and divergences. All are looking good. 
+Here we check the tree depth, E-BFMI, and divergences. All are looking good. 
 
 ```{r Diagnostics-multiple gamma}
 check_treedepth(fit_mgamma)
@@ -396,55 +612,53 @@ check_divergences(fit_mgamma)
 ```
 
 
-As we can see from the following plots of the samples, the plot of the chains of the mean of first interval indicates that it is converged. The other means of the second and third intervals are also converged but there are some divergences. 
+As we can see from the following plots of the samples, the plot of the chains of the mean of the first interval indicates that it is converged. The other means of the second and third intervals are also converged, but there are some divergences. 
 
-When we investigate the plots of the chains for first and second changepoint there are some divergences. However we can also see that the divergence is not random. The divergence on the first changepoint is less that the divergence of the second changepoint. As the histograms of the changepoints also shows that there is a slight probability that the first changepoint is closer to the beginning of the data. And also there is some probability that the second changepoint is around 40. This posterior distribution of the changepoints causes the divergence of the chains.    
+When we investigate the plots of the chains for the first and second changepoint, there are some divergences. However, we can also see that the divergence is not random. The divergence on the first changepoint is less that the divergence of the second changepoint. As the histograms of the changepoints also show, there is a slight probability that the first changepoint is closer to the beginning of data. And also, there is some probability that the second changepoint is around 40. This posterior distribution of the changepoints causes the divergence of the chains.    
 
-
-```{r plot divergences,fig.height=10, fig.width=20}
-matplot(draws_separate_mgamma$s1s, type = c("l"),col = 1:num_chains, 
-        xlab = 'iteration', ylab = 's1')
-matplot(draws_separate_mgamma$s2s, type = c("l"),col = 1:num_chains, 
-        xlab = 'iteration', ylab = 's2')
-matplot(draws_separate_mgamma$e, type = c("l"),col = 1:num_chains, 
-        xlab = 'iteration', ylab = 'e')
-matplot(draws_separate_mgamma$l, type = c("l"),col = 1:num_chains, 
-        xlab = 'iteration', ylab = 'l')
-matplot(draws_separate_mgamma$m, type = c("l"),col = 1:num_chains, 
-        xlab = 'iteration', ylab = 'm')
+```{r plot divergences,fig.height=5, fig.width=10}
+traceplot(fit_mgamma, pars = c("s1s")) + 
+  labs(x = "Iteration", y = "s1", title="Convergence") + esthetic_convergence
+traceplot(fit_mgamma, pars = c("s2s")) + 
+  labs(x = "Iteration", y = "s2", title="Convergence") + esthetic_convergence
+traceplot(fit_mgamma, pars = c("e")) + 
+  labs(x = "Iteration", y = "e", title="Convergence") + esthetic_convergence
+traceplot(fit_mgamma, pars = c("l")) + 
+  labs(x = "Iteration", y = "l", title="Convergence") + esthetic_convergence
+traceplot(fit_mgamma, pars = c("m")) + 
+  labs(x = "Iteration", y = "m", title="Convergence") + esthetic_convergence
 ```
 
-
-## Hierarchical Multiple Changepoint Model
+\newpage
+## Hierarchical Poisson-Gamma Multiple Changepoint Model
 
 ### Histogram of Parameters
 
 The histograms of the parameters are as follows:
 
+```{r color hier hist, echo=FALSE}
+color = 'darkgoldenrod4'
+```
+
+```{r plot means-hierarchical}
+par(bg = NA, fg = color, col.lab = color, col.axis = color, col.main = color)
+hist(draws_hmgamma$e, breaks=100, main='Mean of the First Interval', xlab='e', xlim=c(0,6))
+hist(draws_hmgamma$l, breaks=100, main='Mean of the Second Interval', xlab='l', xlim=c(0,6))
+hist(draws_hmgamma$m, breaks=100, main='Mean of the Third Interval', xlab='m', xlim=c(0,6))
+```
+
+### Posterior Sampling
+
+```{r color hier posterior, echo=FALSE}
+color = 'deepskyblue4'
+```
 
 ```{r plot s1 histogram-hierarchical}
-color = 'goldenrod4'
-samples = draws_separate_hmgamma
-
-par(bg=NA, fg = color, col.lab=color, col.axis=color, col.main=color)
-hist(samples$s1s, breaks = 100, main = 'Histogram of First Changepoint Samples ', 
-     xlab = 's_1',xlim = c(0,data$T))
-```
-```{r plot s2 histogram-hierarchical}
-par(bg=NA, fg = color, col.lab=color, col.axis=color, col.main=color)
-hist(samples$s2s, breaks = 100, main = 'Histogram of Second Changepoint Samples ',
-     xlab = 's_2',xlim = c(0,data$T))
-
-```
-```{r plot means-hierarchical}
-color = 'deepskyblue4'
-par(bg=NA, fg = color, col.lab=color, col.axis=color, col.main=color)
-hist(samples$e, breaks = 100, main = 'Histogram of the Mean of the First Interval', 
-     xlab = 'e',xlim = c(0,6))
-hist(samples$l, breaks = 100, main = 'Histogram of the Mean of the Second Interval', 
-     xlab = 'l',xlim = c(0,6))
-hist(samples$m, breaks = 100, main = 'Histogram of the Mean of the Third Interval', 
-     xlab = 'm',xlim = c(0,6))
+par(bg = NA, fg = color, col.lab = color, col.axis = color, col.main = color)
+hist(draws_hmgamma$s1s, breaks=100, main='First Changepoint Samples', 
+     xlab = 's_1', xlim = c(0,data$T), ylim = c(0,3500))
+hist(draws_hmgamma$s2s, breaks=100, main='Second Changepoint Samples',
+     xlab = 's_2',xlim = c(0,data$T), ylim = c(0,7000))
 ```
 
 ### Convergence Diagnostics
@@ -452,16 +666,16 @@ hist(samples$m, breaks = 100, main = 'Histogram of the Mean of the Third Interva
 The summary of the model fit is as follows: 
 
 ```{r summary and draw samples-hierarchical}
-print(fit_hmgamma, pars = c("e", "l","m", "s1s","s2s"),
+print(fit_hmgamma, pars = c("e", "l", "m", "s1s", "s2s"),
       probs = c(0.025, 0.5, 0.975),
       digits_summary = 2, include = TRUE)
 ```
 
-As we can see that the Rhat values for all parameters and changepoint estimations are 1, that is our model fitted very well.  
+As we can see that the Rhat values for all parameters and changepoint estimations are 1, that is, our model fitted very well.  
 
-The effective sample sizes are looking also good. The ration n_eff / n_transitions is greater than 0.001 for all parameters. 
+The effective sample sizes are also looking good. The ration n_eff / n_transitions is greater than 0.001 for all parameters. 
 
-Here we check the tree depth, E-BFMI and divergences. All are looking good. 
+Here we check the tree depth, E-BFMI, and divergences. All are looking good. 
 
 ```{r Diagnostics-hierarchical}
 check_treedepth(fit_hmgamma)
@@ -469,107 +683,90 @@ check_energy(fit_hmgamma)
 check_divergences(fit_hmgamma)
 ```
 
+As we can see from the following plots of the samples, the plot of the chains of the mean of the first interval indicates that it is converged. The other means of the second and third intervals are also converged, but there are some divergences. 
 
-The same case as in the Non-hierarchical model happens here. The best converged parameter is the mean of the first interval. The divergence on the second changepoint is the highest because of the two possible changepoint locations. 
+The same case, as in the Non-hierarchical model, happens here. For the first and second changepoint, there are some divergences. However, we can also see that the divergence is not random. The divergence on the first changepoint is less that the divergence of the second changepoint. As the histograms of the changepoints also show, there is a slight probability that the first changepoint is closer to the beginning of data. Based on that, there is some probability that the second changepoint is around 40. So, as in the previous model, this posterior distribution of the changepoints causes the divergence of the chains.    
 
 
-```{r plot divergences-hierarchical,fig.height=10, fig.width=20}
-
-matplot(draws_separate_mgamma$s1s, type = c("l"),col = 1:num_chains, 
-        xlab = 'iter', ylab = 's1')
-matplot(draws_separate_mgamma$s2s, type = c("l"),col = 1:num_chains, 
-        xlab = 'iter', ylab = 's2')
-matplot(draws_separate_mgamma$e, type = c("l"),col = 1:num_chains, 
-        xlab = 'iter', ylab = 'e')
-matplot(draws_separate_mgamma$l, type = c("l"),col = 1:num_chains, 
-        xlab = 'iter', ylab = 'l')
-matplot(draws_separate_mgamma$m, type = c("l"),col = 1:num_chains, 
-        xlab = 'iter', ylab = 'm')
+```{r plot divergences-hierarchical,fig.height=4, fig.width=8}
+traceplot(fit_hmgamma, pars = c("s1s")) + 
+  labs(x = "Iteration", y = "s1", title="Convergence") + esthetic_convergence
+traceplot(fit_hmgamma, pars = c("s2s")) + 
+  labs(x = "Iteration", y = "s2", title="Convergence") + esthetic_convergence
+traceplot(fit_hmgamma, pars = c("e")) + 
+  labs(x = "Iteration", y = "e", title="Convergence") + esthetic_convergence
+traceplot(fit_hmgamma, pars = c("l")) + 
+  labs(x = "Iteration", y = "l", title="Convergence") + esthetic_convergence
+traceplot(fit_hmgamma, pars = c("m")) + 
+  labs(x = "Iteration", y = "m", title="Convergence") + esthetic_convergence
 ```
 
+\newpage
 ## Bayesian Online Changepoint Detection
 
 ### Posterior Heatmaps
 
+The following cell of code plots the posterior heatmaps of the Bayesian online changepoint detection algorithm.
+
+```{r plot online run length}
+plot_online <- function(draws){
+  
+  r = matrix(0, nrow = dim(draws)[2], ncol = max(draws))
+  for (t in 1:dim(draws)[1]) {
+    for (i in 1:dim(draws)[2]) {
+      r[i, draws[t,i]] <- r[i, draws[t,i]] + 1
+    }
+  }
+
+  x <- paste0("t", seq(1,dim(draws)[2]))
+  y <- paste0("r", seq(1,max(draws)))
+  posterior_data <- expand.grid(X = x, Y = y)
+  posterior_data$density <- c(r)
+  
+  # Heatmap 
+  ggplot(posterior_data, aes(X, Y, fill = density)) + 
+    geom_tile() + 
+    esthetic_run_length + 
+    labs(title = "Posterior Draws of Run Length", x = "Sequence", y = "Run Length") 
+}
+```
+
 #### Analytical Solution
 
-```{r plot online run length, fig.width=15,fig.height=5}
-t_draws <- t_draws_analytic
-r = matrix(0, nrow = max(t_draws), ncol=dim(t_draws)[1])
-for (t in 1:dim(t_draws)[1]) {
-  for (i in 1:dim(t_draws)[2]) {
-    r[t_draws[t,i],t] <- r[t_draws[t,i],t] + 1
-  }
-}
-
-x <- paste0("t", seq(1,dim(t_draws)[1]))
-y <- paste0("r", seq(1,max(t_draws)))
-data <- expand.grid(X=x, Y=y)
-data$density <- c(t(r))
- 
-# Heatmap 
-ggplot(data, aes(X, Y, fill= density)) + 
-  geom_tile() + theme(
-    title = element_text(size=40),
-    axis.text.x = element_blank(),
-    axis.text.y = element_blank(),
-    axis.title=element_text(size=30,face="bold"),
-    axis.ticks = element_blank()
-  ) + labs(title = "Posterior Draws of Run Length", 
-           x = "Time", y = "Run Length")
+```{r plot analytic coal, fig.width=15,fig.height=5}
+plot_online(draws_analytic)
 ```
+
+\newpage
 
 #### MCMC Solution
 
-```{r plot mcmc run length, fig.width=15,fig.height=5}
-t_draws <- t_draws_mcmc
-r = matrix(0, nrow = max(t_draws), ncol=dim(t_draws)[1])
-for (t in 1:dim(t_draws)[1]) {
-  for (i in 1:dim(t_draws)[2]) {
-    r[t_draws[t,i],t] <- r[t_draws[t,i],t] + 1
-  }
-}
-
-x <- paste0("t", seq(1,dim(t_draws)[1]))
-y <- paste0("r", seq(1,max(t_draws)))
-data <- expand.grid(X=x, Y=y)
-data$density <- c(t(r))
- 
-# Heatmap 
-ggplot(data, aes(X, Y, fill= density)) + 
-  geom_tile() + theme(
-    title = element_text(size=40),
-    axis.text.x = element_blank(),
-    axis.text.y = element_blank(),
-    axis.title=element_text(size=30,face="bold"),
-    axis.ticks = element_blank()
-  ) + labs(title = "Posterior Draws of Run Length", 
-           x = "Time", y = "Run Length")
+```{r plot mcmc coal, fig.width=15,fig.height=5}
+plot_online(draws_mcmc)
 ```
 
 ### Convergence Diagnostics
 
 ```{r summary-analytic, warning=FALSE, message=FALSE}
-fit_analytic_summary <- summary(fit_analytic, pars = c('meas'),
-      digits_summary = 2, include = TRUE)
-length(fit_analytic_summary$summary[fit_analytic_summary$summary[,"Rhat"]>1.05,"Rhat"])
+fit_analytic_summary <- summary(fit_analytic, pars = c('run_length'), 
+                                digits_summary = 2, include = TRUE)
+length(fit_analytic_summary$summary[fit_analytic_summary$summary[,"Rhat"] > 1.05, "Rhat"])
 ```
 
 For analytical solution there is no need for convergence diagnostics because we do not have any random parameters. 
 
 ```{r summary-mcmc, warning=FALSE, message=FALSE}
-fit_mcmc_summary <- summary(fit_mcmc, pars = c('meas'),
-      digits_summary = 2, include = TRUE)
+fit_mcmc_summary <- summary(fit_mcmc, pars = c('run_length'), 
+                            digits_summary = 2, include = TRUE)
 min(fit_mcmc_summary$summary[,"n_eff"],na.rm = TRUE)
-length(fit_mcmc_summary$summary[fit_mcmc_summary$summary[,"Rhat"]>1.05,"Rhat"])
-
+length(fit_mcmc_summary$summary[fit_mcmc_summary$summary[,"Rhat"] > 1.05, "Rhat"])
 ```
 
-As we can see that the minimum Rhat values along all the parameters and changepoint estimations are 1, that is our model fitted very well.  
+As we can see that the minimum Rhat values along with all the parameters and changepoint estimations are 1, that is, our model fitted very well.  
 
-The effective sample sizes are looking also good. The ration n_eff / n_transitions is greater than 0.001 for all parameters. 
+The effective sample sizes are also looking good. The ration n_eff / n_transitions is greater than 0.001 for all parameters. 
 
-Here we check the tree depth, E-BFMI and divergences. All are looking good. 
+Here we check the tree depth, E-BFMI, and divergences. All are looking good. 
 
 ```{r Diagnostics-mcmc}
 check_treedepth(fit_mcmc)
@@ -577,6 +774,7 @@ check_energy(fit_mcmc)
 check_divergences(fit_mcmc)
 ```
 
+\newpage
 # Bayesian Online Changepoint Detection (Syntetic Data)
 
 In this section we have expanded our work to show how effectively Bayesian online changepoint detection algorithm is find more than one changepoints.
@@ -584,96 +782,48 @@ In this section we have expanded our work to show how effectively Bayesian onlin
 ## Analytical Solution
 
 ```{r fit stan analytic on artificial data,echo=TRUE, results = 'hide', warning=FALSE, message=FALSE}
+num_chains <- 5
 fit_syntetic_analytic <- stan("StanFiles/online_analytic.stan",
-                              data=data_synthetic, 
-                              algorithm = "Fixed_param",
-                              iter=2000, warmup=200, chains=5)
+                              data = data_synthetic, algorithm = "Fixed_param",
+                              iter = 2000, warmup = 200, 
+                              chains = num_chains)
+draws_syntetic_analytic <- extract(fit_syntetic_analytic, pars=c("run_length"))$run_length
 ```
 
-
-```{r draws stan analytic on artificial data,echo=TRUE, results = 'hide', warning=FALSE, message=FALSE}
-draws_syntetic_analytic <- extract(fit_syntetic_analytic, pars = c("meas"))
-t_draws_syntetic_analytic <- t(draws_syntetic_analytic$meas)
-```
-
-
-```{r plot online artificial run length, fig.width=15,fig.height=5}
-t_draws <- t_draws_syntetic_analytic
-r = matrix(0, nrow = max(t_draws), ncol=dim(t_draws)[1])
-for (t in 1:dim(t_draws)[1]) {
-  for (i in 1:dim(t_draws)[2]) {
-    r[t_draws[t,i],t] <- r[t_draws[t,i],t] + 1
-  }
-}
-
-x <- paste0("t", seq(1,dim(t_draws)[1]))
-y <- paste0("r", seq(1,max(t_draws)))
-data <- expand.grid(X=x, Y=y)
-data$density <- c(t(r))
- 
-# Heatmap 
-ggplot(data, aes(X, Y, fill= density)) + 
-  geom_tile() + theme(
-    title = element_text(size=40),
-    axis.text.x = element_blank(),
-    axis.text.y = element_blank(),
-    axis.title=element_text(size=30,face="bold"),
-    axis.ticks = element_blank()
-  ) + labs(title = "Posterior Draws of Run Length", 
-           x = "Time", y = "Run Length")
+```{r plot analytic syntetic, fig.width=15,fig.height=5}
+plot_online(draws_syntetic_analytic)
 ```
 
 
 ## MCMC Solution
 
 ```{r fit stan on artificial data mcmc,echo=TRUE, results = 'hide', warning=FALSE, message=FALSE}
+num_chains <- 5
 fit_syntetic_mcmc <- stan("StanFiles/online_mcmc.stan",
-                          data=data_synthetic,
-                          iter=2500, warmup=500, chains=5)
+                          data = data_synthetic,
+                          iter = 2500, warmup = 500, 
+                          chains = num_chains)
+draws_syntetic_mcmc <- extract(fit_syntetic_mcmc, pars=c("run_length"))$run_length
 ```
 
-
-```{r draws stan on artificial data mcmc,echo=TRUE, results = 'hide', warning=FALSE, message=FALSE}
-draws_syntetic_mcmc <- extract(fit_syntetic_mcmc, pars = c("meas"))
-t_draws_syntetic_mcmc <- t(draws_syntetic_mcmc$meas)
+```{r plot mcmc syntetic, fig.width=15,fig.height=5}
+plot_online(draws_syntetic_mcmc)
 ```
 
-```{r plot online artificial run length mcmc, fig.width=15,fig.height=5}
-t_draws <- t_draws_syntetic_mcmc
-r = matrix(0, nrow = max(t_draws), ncol=dim(t_draws)[1])
-for (t in 1:dim(t_draws)[1]) {
-  for (i in 1:dim(t_draws)[2]) {
-    r[t_draws[t,i],t] <- r[t_draws[t,i],t] + 1
-  }
-}
-
-x <- paste0("t", seq(1,dim(t_draws)[1]))
-y <- paste0("r", seq(1,max(t_draws)))
-data <- expand.grid(X=x, Y=y)
-data$density <- c(t(r))
- 
-# Heatmap 
-ggplot(data, aes(X, Y, fill= density)) + 
-  geom_tile() + theme(
-    title = element_text(size=40),
-    axis.text.x = element_blank(),
-    axis.text.y = element_blank(),
-    axis.title=element_text(size=30,face="bold"),
-    axis.ticks = element_blank()
-  ) + labs(title = "Posterior Draws of Run Length", 
-           x = "Time", y = "Run Length")
-```
-
+\newpage
 # Conclusion
 
-The multiple changepoint model (MCM) and hierarchical multiple changepoint model(HMCM) are performing in a similar fashion. However, when we compare the standard deviations of the parameters for MCM and HMCM, we see that HMCM has slightly lower standard deviation then MCM. 
-It can also be seen from the histograms of the estimate for second changepoint, $s_2$.
+In our project, we showed that the changepoints on the coal mining disasters dataset. We use it because it is widely agreed in the statistical literature, and it has changepoint in the year of the 1890 (40th index). Both of our models solve this changepoint almost precisely. On the other hand, all of our models find a second, slightly weak changepoint. It could be expected because our first two models are biassed on finding two changepoints. What we did not expect is that the bayesian online changepoint detection algorithm also finds the exact same changepoint. Typically, this dataset is used for the one changepoint detection; however, we showed that this data actually has two changepoints.
 
-In the online changepoint model we have compared our MCMC draws results with analytical solution of the problem. 
+As a starting point, we compared the multiple changepoint model (MCM) and a hierarchical version of multiple changepoint model(HMCM). MCM and HMCM are performing similarly. However, when we compare the standard deviations of the parameters for MCM and HMCM, we see that HMCM has a slightly lower standard deviation then MCM. 
 
-Overall, Bayesian Online Changepoint Model is superior to other models. It can find any number of changepoints in linear time and it converges much faster. In this project we implemeted Poisson observation and Gamma underlying process version of the algorithm. 
+In the Bayesian online changepoint model (BOCM), we have compared our MCMC draws results with the analytical solution of the problem because it is not possible to directly compare BOCM with other models since they do not share the same likelihood. BOCM approaches the changepoint problem with a different idea and calculates the posterior distribution of the run-lengths of the subsequences, instead of solving the changepoint between subsequences.
 
-We specifically used conjugate prior model in order to compare with the analytical solution. As a future work, more generic versions of the MCMC solution of the model can be implemented. Because it can be used with models which do not have conjugate priors. This allows more complex models. 
+In this project, we implemented Poisson observation and Gamma underlying process version of the algorithm. We specifically used a conjugate prior model to compare with the analytical solution. As future work, more generic versions of the MCMC solution of the model can be implemented because it can be used with models that do not have conjugate priors. This allows for more complex models. 
+
+Overall, Bayesian Online Changepoint Model is superior to other models. It can find any number of changepoints in linear time, and it converges much faster. One drawback of the BOCM is memory usage because it keeps the log of entire possible run-lengths. The implementation of the Sequential Importance Sampling could solve this problem.
+
+In our work, we made several contributions. We implemented a multiple changepoint model for two changepoints efficiently. More importantly, we wrote the STAN code of the online Bayesian changepoint model, both analytical and MCMC versions. 
 
 
 
